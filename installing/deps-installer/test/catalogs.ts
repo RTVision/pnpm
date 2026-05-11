@@ -1755,6 +1755,53 @@ describe('update', () => {
     expect(Object.keys(readLockfile().snapshots)).toEqual(['@pnpm.e2e/foo@100.1.0'])
   })
 
+  test('update does not let a peer dependency spec override a catalog dependency', async () => {
+    const { options, projects } = preparePackagesAndReturnObjects([{
+      name: 'project1',
+      dependencies: {
+        '@pnpm.e2e/foo': 'catalog:',
+      },
+      peerDependencies: {
+        '@pnpm.e2e/foo': '>=1',
+      },
+    }])
+
+    const mutateOpts = {
+      ...options,
+      catalogMode: 'prefer' as const,
+      lockfileOnly: true,
+      catalogs: {
+        default: { '@pnpm.e2e/foo': '^1.0.0' },
+      },
+    }
+
+    await mutateModules(installProjects(projects), mutateOpts)
+
+    const { updatedCatalogs, updatedManifest } = await addDependenciesToPackage(
+      projects['project1' as ProjectId],
+      ['@pnpm.e2e/foo'],
+      {
+        ...mutateOpts,
+        dir: path.join(options.lockfileDir, 'project1'),
+        update: true,
+      })
+
+    expect(updatedManifest).toEqual({
+      name: 'project1',
+      dependencies: {
+        '@pnpm.e2e/foo': 'catalog:',
+      },
+      peerDependencies: {
+        '@pnpm.e2e/foo': '>=1',
+      },
+    })
+    expect(updatedCatalogs).toEqual({
+      default: {
+        '@pnpm.e2e/foo': '^1.3.0',
+      },
+    })
+  })
+
   // This test will update @pnpm.e2e/bar, but make sure @pnpm.e2e/foo is
   // untouched. On the registry-mock, the versions for @pnpm.e2e/bar are:
   //
